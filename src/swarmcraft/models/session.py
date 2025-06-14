@@ -38,3 +38,7 @@ class GameSession(BaseModel):
     swarm_iteration: int = 0
     created_at: datetime
     started_at: Optional[datetime] = None
+
+
+class MoveData(BaseModel):
+    participant_id: str
