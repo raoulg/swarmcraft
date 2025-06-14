@@ -1,0 +1,324 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SwarmCraft Minimal Test Client</title>
+    <style>
+      body {
+        font-family: sans-serif;
+        display: flex;
+        gap: 20px;
+        padding: 20px;
+        background-color: #f0f0f0;
+      }
+      .controls,
+      .logs {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .controls div,
+      .logs div {
+        display: flex;
+        flex-direction: column;
+      }
+      .main-content {
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+      }
+      #grid-container {
+        display: grid;
+        border: 2px solid #333;
+        background-color: #fff;
+      }
+      .grid-cell {
+        width: 20px;
+        height: 20px;
+        box-shadow: inset 0 0 0 1px #ddd;
+        position: relative;
+      }
+      .particle-marker {
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        border: 1px solid white;
+        transition: all 0.5s ease-in-out; /* Animate color and position changes */
+        margin: auto;
+      }
+      #cards-container {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+      }
+      .participant-card {
+        padding: 10px;
+        border-radius: 5px;
+        border: 1px solid #ccc;
+        min-width: 200px;
+        color: white;
+        text-shadow: 1px 1px 2px black;
+      }
+      #log-output {
+        background-color: #333;
+        color: #lime;
+        padding: 10px;
+        height: 300px;
+        overflow-y: scroll;
+        white-space: pre-wrap;
+        font-family: monospace;
+      }
+      button:disabled {
+        background-color: #ccc;
+        cursor: not-allowed;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="controls">
+      <h2>Controls</h2>
+      <div>
+        <label for="admin-key">Admin Key (SWARM_API_KEY)</label>
+        <input type="text" id="admin-key" placeholder="Paste your key here" />
+      </div>
+      <div>
+        <label for="num-participants">Number of Participants</label>
+        <input type="number" id="num-participants" value="10" />
+      </div>
+      <button id="setup-btn">1. Setup & Join Session</button>
+      <button id="start-btn" disabled>2. Start Session</button>
+      <button id="step-btn" disabled>3. Trigger Step</button>
+    </div>
+
+    <div class="main-content">
+      <div id="grid-container"></div>
+      <div id="cards-container"></div>
+    </div>
+
+    <div class="logs">
+      <h2>Event Log</h2>
+      <div id="log-output"></div>
+    </div>
+  </body>
+  <script>
+    // --- CONFIG ---
+    const API_BASE_URL = "http://localhost:8000";
+    const WS_BASE_URL = "ws://localhost:8000";
+
+    // --- STATE ---
+    let sessionData = {};
+    let participants = {};
+    let websockets = {};
+
+    // --- DOM ELEMENTS ---
+    const adminKeyInput = document.getElementById("admin-key");
+    const numParticipantsInput = document.getElementById("num-participants");
+    const setupBtn = document.getElementById("setup-btn");
+    const startBtn = document.getElementById("start-btn");
+    const stepBtn = document.getElementById("step-btn");
+    const gridContainer = document.getElementById("grid-container");
+    const cardsContainer = document.getElementById("cards-container");
+    const logOutput = document.getElementById("log-output");
+
+    // --- LOGIC ---
+    const logMessage = (message, data) => {
+      const fullMessage = data
+        ? `${message}: ${JSON.stringify(data, null, 2)}`
+        : message;
+      console.log(fullMessage);
+      logOutput.innerHTML += `${new Date().toLocaleTimeString()}: ${message}\n`;
+      logOutput.scrollTop = logOutput.scrollHeight;
+    };
+
+    const render = () => {
+      if (!sessionData.config) return;
+      gridContainer.innerHTML = "";
+      gridContainer.style.gridTemplateColumns = `repeat(${sessionData.config.grid_size}, 22px)`;
+      for (
+        let i = 0;
+        i < sessionData.config.grid_size * sessionData.config.grid_size;
+        i++
+      ) {
+        const cell = document.createElement("div");
+        cell.className = "grid-cell";
+        gridContainer.appendChild(cell);
+      }
+      cardsContainer.innerHTML = "";
+      for (const p of Object.values(participants)) {
+        const card = document.createElement("div");
+        card.className = "participant-card";
+        card.id = `card-${p.id}`;
+        card.style.backgroundColor = p.color || "#888";
+        card.innerHTML = `
+                    <b>${p.name} (${p.id})</b><br>
+                    Position: [${p.position ? p.position.join(", ") : "N/A"}]<br>
+                    Fitness: ${p.fitness ? p.fitness.toFixed(2) : "N/A"}<br>
+                    Speed: ${p.velocity_magnitude ? p.velocity_magnitude.toFixed(2) : "N/A"}
+                `;
+        cardsContainer.appendChild(card);
+        if (p.position) {
+          const marker = document.createElement("div");
+          marker.className = "particle-marker";
+          marker.id = `marker-${p.id}`;
+          marker.style.backgroundColor = p.color || "#888";
+          const [row, col] = p.position;
+          marker.style.gridRowStart = row + 1;
+          marker.style.gridColumnStart = col + 1;
+          gridContainer.appendChild(marker);
+        }
+      }
+    };
+
+    const handleWebSocketMessage = (event) => {
+      const data = JSON.parse(event.data);
+      logMessage(`WebSocket received: ${data.type}`, data);
+      if (data.type === "session_state") {
+        Object.assign(sessionData, data.session);
+        // sessionData = data.session;
+        for (const p of data.session.participants) {
+          if (participants[p.id]) {
+            Object.assign(participants[p.id], p);
+          }
+        }
+        render();
+      }
+    };
+
+    setupBtn.addEventListener("click", async () => {
+      logMessage("Setting up session...");
+      const adminKey = adminKeyInput.value;
+      if (!adminKey) {
+        logMessage("ERROR: Admin key is required.");
+        return;
+      }
+      setupBtn.disabled = true;
+
+      try {
+        logMessage("1. Creating session...");
+        const createRes = await fetch(
+          `${API_BASE_URL}/api/admin/create-session`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-Admin-Key": adminKey,
+            },
+            body: JSON.stringify({
+              landscape_type: "rastrigin",
+              grid_size: 25,
+              max_participants: 50,
+            }),
+          },
+        );
+        if (!createRes.ok)
+          throw new Error(
+            `Failed to create session: ${await createRes.text()}`,
+          );
+
+        const createData = await createRes.json();
+        logMessage("--> Received from create-session", createData);
+
+        sessionData.id = createData.session_id;
+        sessionData.code = createData.session_code;
+
+        if (!sessionData.code) {
+          throw new Error("Session code was not received from server!");
+        }
+        logMessage(
+          `Session created! ID: ${sessionData.id}, Code: ${sessionData.code}`,
+        );
+
+        logMessage("2. Joining participants...");
+        const numParticipants = parseInt(numParticipantsInput.value, 10);
+        for (let i = 0; i < numParticipants; i++) {
+          const joinRes = await fetch(
+            `${API_BASE_URL}/api/join/${sessionData.code}`,
+            { method: "POST" },
+          );
+
+          if (!joinRes.ok) {
+            const errorData = await joinRes.json();
+            throw new Error(
+              `Participant ${i + 1} failed to join: ${JSON.stringify(errorData)}`,
+            );
+          }
+
+          const pData = await joinRes.json();
+          const participantId = pData.participant_id; // <-- Capture the ID here
+          participants[participantId] = { ...pData, color: "#888" };
+          logMessage(
+            `   ${pData.participant_name} joined with ID ${participantId}.`,
+          );
+
+          logMessage(`3. Opening WebSocket for ${participantId}...`);
+          const ws = new WebSocket(
+            `${WS_BASE_URL}/ws/${sessionData.id}/${participantId}`,
+          );
+          ws.onmessage = handleWebSocketMessage;
+
+          ws.onopen = () =>
+            logMessage(`   WebSocket connected for ${participantId}.`);
+          ws.onerror = (err) =>
+            logMessage(
+              `   WebSocket error for ${participantId}: ${JSON.stringify(err)}`,
+            );
+          websockets[participantId] = ws;
+        }
+
+        const statusRes = await fetch(
+          `${API_BASE_URL}/api/session/${sessionData.id}/status`,
+        );
+        sessionData.config = await statusRes.json();
+
+        render();
+        startBtn.disabled = false;
+      } catch (error) {
+        logMessage(`ERROR: ${error.message}`);
+        setupBtn.disabled = false;
+      }
+    });
+
+    startBtn.addEventListener("click", async () => {
+      logMessage("Starting session...");
+      startBtn.disabled = true;
+      try {
+        const res = await fetch(
+          `${API_BASE_URL}/api/admin/session/${sessionData.id}/start`,
+          {
+            method: "POST",
+            headers: { "X-Admin-Key": adminKeyInput.value },
+          },
+        );
+        if (!res.ok)
+          throw new Error(`Failed to start session: ${await res.text()}`);
+
+        logMessage("Session started! Ready to trigger steps.");
+        stepBtn.disabled = false;
+      } catch (error) {
+        logMessage(`ERROR: ${error.message}`);
+        startBtn.disabled = false;
+      }
+    });
+
+    stepBtn.addEventListener("click", async () => {
+      logMessage("Triggering step...");
+      try {
+        const res = await fetch(
+          `${API_BASE_URL}/api/admin/session/${sessionData.id}/step`,
+          {
+            method: "POST",
+            headers: { "X-Admin-Key": adminKeyInput.value },
+          },
+        );
+        if (!res.ok)
+          throw new Error(`Failed to trigger step: ${await res.text()}`);
+
+        const resData = await res.json();
+        logMessage(resData.message);
+      } catch (error) {
+        logMessage(`ERROR: ${error.message}`);
+      }
+    });
+  </script>
+</html>
