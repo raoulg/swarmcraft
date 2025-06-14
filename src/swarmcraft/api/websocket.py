@@ -130,11 +130,34 @@ class ConnectionManager:
             return
 
         session = GameSession(**session_data)
+        landscape = create_landscape(
+            session.config.landscape_type, **session.config.landscape_params
+        )
+
+        # Build the list of participants, now including velocity and color
+        participants_list = []
+        for p in session.participants:
+            participants_list.append(
+                {
+                    "id": p.id,
+                    "name": p.name,
+                    "position": p.position,
+                    "fitness": p.fitness,
+                    "velocity_magnitude": p.velocity_magnitude,
+                    "color": landscape.get_fitness_color(
+                        p.fitness, p.velocity_magnitude
+                    )
+                    if p.fitness is not None
+                    else "#888888",
+                    "connected": p.id in self.active_connections.get(session_id, {}),
+                }
+            )
 
         state_message = {
             "type": "session_state",
             "session": {
                 "id": session.id,
+                "code:": session.code,
                 "status": session.status.value,
                 "participants": [
                     {
