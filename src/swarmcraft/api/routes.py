@@ -22,7 +22,7 @@ router = APIRouter()
 
 async def verify_admin_key(x_admin_key: Optional[str] = Header(None)):
     """Verify admin secret key"""
-    expected_key = os.getenv("ADMIN_SECRET_KEY")
+    expected_key = os.getenv("SWARM_API_KEY")
     if not expected_key:
         raise HTTPException(status_code=500, detail="Admin key not configured")
     if x_admin_key != expected_key:

@@ -9,7 +9,7 @@ from swarmcraft.utils.name_generator import (
 )
 
 # Set test environment
-os.environ["ADMIN_SECRET_KEY"] = "test_admin_key_12345"
+os.environ["SWARM_API_KEY"] = "test_admin_key_12345"
 os.environ["REDIS_URL"] = "redis://localhost:6379/1"  # Use different DB for tests
 
 
