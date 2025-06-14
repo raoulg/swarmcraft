@@ -11,6 +11,7 @@ from typing import List, Tuple, Dict, Any, Optional, Callable
 import numpy as np
 from pydantic import BaseModel, Field, field_validator, ConfigDict
 from enum import Enum
+from swarmcraft.models.session import Participant
 
 
 class ParticleState(Enum):
@@ -336,3 +337,35 @@ class SwarmOptimizer(ABC):
                 distances.append(np.linalg.norm(positions[i] - positions[j]))
 
         return float(np.mean(distances)) if distances else 0.0
+
+    def sync_participants_from_swarm(
+        self,
+        participants: List[Participant],
+        grid_size: int,
+    ) -> List[Participant]:
+        """
+        Updates a list of Participant objects with the current state from the swarm
+        and returns the updated list.
+        """
+        if len(participants) != len(self.swarm_state.particles):
+            print("Warning: Participant count and particle count do not match.")
+            return participants
+
+        bounds = self.bounds
+
+        for i, participant in enumerate(participants):
+            particle = self.swarm_state.particles[i]
+            continuous_pos = particle.position
+
+            x, y = continuous_pos[0], continuous_pos[1]
+            col = int((x - bounds[0][0]) / (bounds[0][1] - bounds[0][0]) * grid_size)
+            row = int((y - bounds[1][0]) / (bounds[1][1] - bounds[1][0]) * grid_size)
+            grid_pos = [
+                max(0, min(grid_size - 1, row)),
+                max(0, min(grid_size - 1, col)),
+            ]
+
+            participant.position = grid_pos
+            participant.fitness = particle.fitness
+
+        return participants
