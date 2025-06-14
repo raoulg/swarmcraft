@@ -147,7 +147,7 @@ class ConnectionManager:
                     }
                     for p in session.participants
                 ],
-                "config": session.config.model_dump(),
+                "config": session.config.model_dump(mode="json"),
                 "iteration": session.swarm_iteration,
             },
             "timestamp": datetime.now().isoformat(),
@@ -202,7 +202,10 @@ class ConnectionManager:
 
         # Save updated session
         await set_json(
-            f"session:{session_id}", session.model_dump(), redis_conn, expire=86400
+            f"session:{session_id}",
+            session.model_dump(mode="json"),
+            redis_conn,
+            expire=86400,
         )
 
         # Send personal feedback
@@ -308,7 +311,10 @@ class ConnectionManager:
 
         # Save updated session
         await set_json(
-            f"session:{session_id}", session.model_dump(), redis_conn, expire=86400
+            f"session:{session_id}",
+            session.model_dump(mode="json"),
+            redis_conn,
+            expire=86400,
         )
 
         # Broadcast swarm update
