@@ -57,7 +57,7 @@ class OptimizationLandscape(ABC):
         pass
 
     @abstractmethod
-    def evaluate(self, position: np.ndarray) -> float:
+    def evaluate(self, position: np.ndarray | list[float]) -> float:
         """
         Evaluate the loss function at given position.
 
@@ -177,12 +177,14 @@ class RastriginLandscape(OptimizationLandscape):
             else None,
         )
 
-    def evaluate(self, position: np.ndarray) -> float:
+    def evaluate(self, position: np.ndarray | list[float]) -> float:
         """
         Evaluate Rastrigin function.
 
         f(x) = A*n + Σ[x_i² - A*cos(2π*x_i)]
         """
+        if isinstance(position, list):
+            position = np.array(position)
         n = len(position)
         return self.A * n + np.sum(position**2 - self.A * np.cos(2 * np.pi * position))
 
@@ -236,7 +238,7 @@ class EcologicalLandscape(OptimizationLandscape):
             axis_labels=["Economic Development", "Environmental Regulation"],
         )
 
-    def evaluate(self, position: np.ndarray) -> float:
+    def evaluate(self, position: np.ndarray | list[float]) -> float:
         """
         Evaluate ecological landscape.
 
@@ -245,6 +247,8 @@ class EcologicalLandscape(OptimizationLandscape):
         - Local minimum at low development, high regulation (economic stagnation)
         - Global minimum at moderate-high development with strong regulation (sustainability)
         """
+        if isinstance(position, list):
+            position = np.array(position)
         development, regulation = position[0], position[1]
 
         # Economic benefit (higher development is better, but with diminishing returns)
