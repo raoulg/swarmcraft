@@ -30,3 +30,14 @@ swarmcraft/
 └── frontend/                       # Future Svelte app
     └── (Phase 2)
 ```
+
+curl -X POST "http://localhost:8000/api/admin/create-session" \
+  -H "X-Admin-Key: $ADMIN_SECRET_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "landscape_type": "rastrigin",
+    "landscape_params": {"A": 10.0, "dimensions": 2},
+    "grid_size": 25,
+    "max_participants": 30,
+    "exploration_probability": 0.15
+  }'
