@@ -257,9 +257,8 @@ async def trigger_swarm_step(
 ):
     """
     Executes a full, synchronous step of the PSO algorithm, updating all
-    particles at once.
+    particles at once and broadcasting the result.
     """
-    # 1. LOAD both the GameSession and the full SwarmState from Redis
     session_data = await get_json(f"session:{session_id}", redis_conn)
     swarm_state_data = await get_json(f"swarm_state:{session_id}", redis_conn)
 
@@ -272,7 +271,6 @@ async def trigger_swarm_step(
     if session.status != SessionStatus.ACTIVE:
         return {"message": "Swarm step skipped: session is not active."}
 
-    # 2. HYDRATE a temporary PSO instance with the loaded state
     landscape = create_landscape(
         session.config.landscape_type, **session.config.landscape_params
     )
@@ -287,17 +285,17 @@ async def trigger_swarm_step(
     )
     pso.swarm_state = swarm_state
 
-    # 3. MUTATE the state by executing one full step of the algorithm
-    #    This updates all particles in pso.swarm_state in-memory.
+    # This call now correctly increments the iteration *before* calculating params
     pso.step()
 
-    # 4. SYNC the GameSession with the new state of all particles
-    session.participants = pso.sync_participants_from_swarm(
+    updated_participants = pso.sync_participants_from_swarm(
         participants=session.participants, grid_size=session.config.grid_size
     )
+    session.participants = updated_participants
     session.swarm_iteration = pso.swarm_state.iteration
 
-    # 5. SAVE both updated states back to Redis
+    stats = pso.get_pso_statistics()
+
     await set_json(
         f"session:{session_id}",
         session.model_dump(mode="json"),
@@ -311,11 +309,18 @@ async def trigger_swarm_step(
         expire=86400,
     )
 
-    await websocket_manager.send_session_state(session_id)
-
-    # Note: After this call, you would likely want to broadcast the full
-    # new state to all participants via WebSockets so their phones update.
-    # We can add that logic to websocket.py later.
+    swarm_update_message = {
+        "type": "swarm_update",
+        "iteration": session.swarm_iteration,
+        "participants": [p.model_dump(mode="json") for p in updated_participants],
+        "statistics": {
+            "global_best_fitness": stats["global_best_fitness"],
+            "explorers": stats["exploration_stats"]["explorers"],
+            "exploration_probability": stats["current_exploration_probability"],
+        },
+        "timestamp": datetime.now().isoformat(),
+    }
+    await websocket_manager.broadcast_to_session(swarm_update_message, session_id)
 
     return {"message": f"Swarm step {session.swarm_iteration} executed successfully."}
 
@@ -380,11 +385,14 @@ async def start_session(
     )
 
     # 5. NOTIFY clients that the game is on!
+    # First, send a simple "started" message.
     await websocket_manager.broadcast_to_session(
         {
             "type": "session_started",
             "message": "The swarm optimization has begun! You have been assigned a starting position.",
             "timestamp": datetime.now().isoformat(),
+            # Include the initial state in the start message itself for efficiency
+            "session": session.model_dump(mode="json"),
         },
         session_id,
     )

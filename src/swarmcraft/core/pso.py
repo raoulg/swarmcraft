@@ -11,7 +11,12 @@ import numpy as np
 from typing import List, Optional, Callable, Tuple
 import random
 
-from swarmcraft.core.swarm_base import SwarmOptimizer, Particle, ParticleState
+from swarmcraft.core.swarm_base import (
+    SwarmOptimizer,
+    Particle,
+    ParticleState,
+    SwarmState,
+)
 
 
 class PSO(SwarmOptimizer):
@@ -86,13 +91,38 @@ class PSO(SwarmOptimizer):
         search_range = self.bounds[:, 1] - self.bounds[:, 0]
         self.max_velocity = max_velocity_factor * search_range
 
+    def step(self) -> SwarmState:
+        """
+        Perform one iteration of the optimization algorithm.
+
+        Returns:
+            Updated swarm state
+        """
+        # Increment iteration at the beginning of the step for correct parameter calculation
+        self.swarm_state.iteration += 1
+
+        # Update particles using algorithm-specific rules
+        self._update_particles()
+
+        # Evaluate fitness and update personal/global bests
+        self._evaluate_and_update_bests()
+
+        # Update phase based on the new iteration count
+        self.swarm_state.phase = self._determine_phase()
+
+        # Store history
+        self.history.append(self.swarm_state.model_copy(deep=True))
+
+        return self.swarm_state
+
     def _update_adaptive_parameters(self) -> None:
         """Update adaptive parameters using linear decay based on progress."""
         # Avoid division by zero if max_iterations is 0 or 1
         if self.max_iterations <= 1:
             return
 
-        progress = self.swarm_state.iteration / self.max_iterations
+        # Clamp progress between 0.0 and 1.0 to prevent strange behavior at the end
+        progress = min(1.0, self.swarm_state.iteration / self.max_iterations)
 
         # 1. Update inertia weight
         self.inertia_weight = (
@@ -107,10 +137,12 @@ class PSO(SwarmOptimizer):
             self.current_exploration_probability = (
                 self.initial_exploration_probability
                 - (
-                    self.initial_exploration_probability
-                    - self.min_exploration_probability
+                    (
+                        self.initial_exploration_probability
+                        - self.min_exploration_probability
+                    )
+                    * progress
                 )
-                * progress
             )
 
     def _update_particles(self) -> None:
