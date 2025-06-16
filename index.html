@@ -196,11 +196,32 @@
     const handleWebSocketMessage = (event) => {
       const data = JSON.parse(event.data);
       logMessage(`WebSocket received: ${data.type}`);
-      if (data.type === "session_state") {
-        Object.assign(sessionData, data.session);
-        for (const p of data.session.participants) {
-          if (participants[p.id]) {
-            Object.assign(participants[p.id], p);
+
+      if (data.type === "session_state" || data.type === "session_started") {
+        // This block might not be needed if session_started also sends a full state,
+        // but it's good for robustness.
+        if (data.session) {
+          Object.assign(sessionData, data.session);
+          for (const p of data.session.participants) {
+            if (participants[p.id]) {
+              Object.assign(participants[p.id], p);
+            }
+          }
+        }
+        render();
+      } else if (data.type === "swarm_update") {
+        sessionData.iteration = data.iteration;
+        const stats = data.statistics;
+        logMessage(
+          `  -> Iteration: ${data.iteration}, Explorers: ${stats.explorers}, ` +
+            `Explore P: ${stats.exploration_probability.toFixed(3)}, ` +
+            `Best Fit: ${stats.global_best_fitness.toFixed(3)}`,
+        );
+
+        // Update participants with new data from the swarm_update message
+        for (const p_data of data.participants) {
+          if (participants[p_data.id]) {
+            Object.assign(participants[p_data.id], p_data);
           }
         }
         render();
@@ -354,6 +375,7 @@
           throw new Error(`Failed to trigger step: ${await res.text()}`);
 
         const resData = await res.json();
+        // The detailed log is now handled by the 'swarm_update' websocket message
         logMessage(resData.message);
       } catch (error) {
         logMessage(`ERROR: ${error.message}`);
