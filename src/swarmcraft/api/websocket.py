@@ -3,6 +3,7 @@ from typing import Dict, List
 import json
 from datetime import datetime
 import logging
+import numpy as np
 
 from swarmcraft.database.redis_client import get_redis, get_json, set_json
 from swarmcraft.models.session import GameSession, SessionStatus
@@ -285,6 +286,7 @@ class ConnectionManager:
                 bounds=bounds,
                 loss_function=discrete_landscape_func,
                 population_size=len(session.participants),
+                max_iterations=session.config.max_iterations,
                 exploration_probability=session.config.exploration_probability,
                 min_exploration_probability=session.config.min_exploration_probability,
             )
@@ -295,6 +297,9 @@ class ConnectionManager:
         for i, participant in enumerate(session.participants):
             if participant.position and i < len(swarm.swarm_state.particles):
                 # Convert grid coordinates to continuous
+                landscape = create_landscape(
+                    session.config.landscape_type, **session.config.landscape_params
+                )
                 bounds = landscape.metadata.recommended_bounds
                 x_min, x_max = bounds[0]
                 y_min, y_max = bounds[1]
@@ -311,7 +316,7 @@ class ConnectionManager:
 
                 # Update particle position
                 particle = swarm.swarm_state.particles[i]
-                particle.update_position([x, y])
+                particle.update_position(np.array([x, y]))
                 if participant.fitness is not None:
                     particle.fitness = participant.fitness
 

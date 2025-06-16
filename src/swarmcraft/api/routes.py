@@ -177,6 +177,7 @@ async def make_move(
         bounds=landscape.metadata.recommended_bounds,
         loss_function=landscape.evaluate,
         population_size=len(session.participants),
+        max_iterations=session.config.max_iterations,
         exploration_probability=session.config.exploration_probability,
         min_exploration_probability=session.config.min_exploration_probability,
     )
@@ -280,6 +281,7 @@ async def trigger_swarm_step(
         bounds=landscape.metadata.recommended_bounds,
         loss_function=landscape.evaluate,
         population_size=len(session.participants),
+        max_iterations=session.config.max_iterations,
         exploration_probability=session.config.exploration_probability,
         min_exploration_probability=session.config.min_exploration_probability,
     )
@@ -350,6 +352,7 @@ async def start_session(
         bounds=landscape.metadata.recommended_bounds,
         loss_function=landscape.evaluate,
         population_size=len(session.participants),
+        max_iterations=session.config.max_iterations,
         exploration_probability=session.config.exploration_probability,
         min_exploration_probability=session.config.min_exploration_probability,
     )

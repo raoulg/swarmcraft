@@ -28,6 +28,7 @@ class SessionConfig(BaseModel):
     max_participants: int = 30
     exploration_probability: float = 0.15
     min_exploration_probability: Optional[float] = None
+    max_iterations: int = 10
 
 
 class GameSession(BaseModel):

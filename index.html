@@ -18,10 +18,11 @@
         flex-direction: column;
         gap: 10px;
       }
-      .controls div,
-      .logs div {
+      .controls div {
         display: flex;
         flex-direction: column;
+        gap: 4px;
+        margin-bottom: 10px;
       }
       .main-content {
         display: flex;
@@ -64,7 +65,7 @@
         background-color: #333;
         color: #lime;
         padding: 10px;
-        height: 300px;
+        height: 400px;
         overflow-y: scroll;
         white-space: pre-wrap;
         font-family: monospace;
@@ -81,10 +82,22 @@
       <div>
         <label for="admin-key">Admin Key (SWARM_API_KEY)</label>
         <input
-          type="text"
+          type="password"
           id="admin-key"
           placeholder="Paste your key from .env file"
         />
+      </div>
+      <div>
+        <label for="landscape-type">Landscape</label>
+        <select id="landscape-type">
+          <option value="quadratic" selected>Quadratic (Easy)</option>
+          <option value="rastrigin">Rastrigin (Hard)</option>
+          <option value="ecological">Ecological (Complex)</option>
+        </select>
+      </div>
+      <div>
+        <label for="max-iterations">Max Iterations (for cooldown)</label>
+        <input type="number" id="max-iterations" value="20" />
       </div>
       <div>
         <label for="num-participants">Number of Participants</label>
@@ -117,6 +130,8 @@
 
     // --- DOM ELEMENTS ---
     const adminKeyInput = document.getElementById("admin-key");
+    const landscapeTypeInput = document.getElementById("landscape-type");
+    const maxIterationsInput = document.getElementById("max-iterations");
     const numParticipantsInput = document.getElementById("num-participants");
     const setupBtn = document.getElementById("setup-btn");
     const startBtn = document.getElementById("start-btn");
@@ -206,12 +221,17 @@
         logMessage(
           "ERROR: Admin key is required. Please paste it from your .env file.",
         );
-        return; // Stop execution if key is missing
+        return;
       }
       setupBtn.disabled = true;
 
+      const landscapeType = landscapeTypeInput.value;
+      const maxIterations = parseInt(maxIterationsInput.value, 10);
+
       try {
-        logMessage("1. Creating session with exploration cooldown...");
+        logMessage(
+          `1. Creating session (${landscapeType}, ${maxIterations} iterations)...`,
+        );
         const createRes = await fetch(
           `${API_BASE_URL}/api/admin/create-session`,
           {
@@ -221,11 +241,12 @@
               "X-Admin-Key": adminKey,
             },
             body: JSON.stringify({
-              landscape_type: "quadratic",
+              landscape_type: landscapeType,
               grid_size: 20,
               max_participants: 50,
-              exploration_probability: 0.25, // Start with higher exploration
-              min_exploration_probability: 0.01, // Cool down to almost zero
+              exploration_probability: 0.25,
+              min_exploration_probability: 0.01,
+              max_iterations: maxIterations,
             }),
           },
         );
