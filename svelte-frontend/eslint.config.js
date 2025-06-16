@@ -23,6 +23,18 @@ export default ts.config(
 		rules: { 'no-undef': 'off' }
 	},
 	{
+		rules: {
+			'@typescript-eslint/no-unused-vars': [
+				'warn', // Use "warn" instead of "error" to be less intrusive
+				{
+					argsIgnorePattern: '^_',
+					varsIgnorePattern: '^_',
+					caughtErrorsIgnorePattern: '^_'
+				}
+			]
+		}
+	},
+	{
 		files: ['**/*.svelte', '**/*.svelte.ts', '**/*.svelte.js'],
 		languageOptions: {
 			parserOptions: {
