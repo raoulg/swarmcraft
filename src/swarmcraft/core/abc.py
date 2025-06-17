@@ -51,8 +51,10 @@ class ABC(SwarmOptimizer):
         self.limit = limit
         self.employed_ratio = employed_ratio
 
-        # Calculate bee counts
-        self.employed_count = int(population_size * employed_ratio)
+        # Calculate bee counts with minimum constraints
+        self.employed_count = max(
+            1, int(population_size * employed_ratio)
+        )  # At least 1 employed bee
         self.onlooker_count = population_size - self.employed_count
 
         # Track food source abandonment (indexed by employed bee)
@@ -127,6 +129,10 @@ class ABC(SwarmOptimizer):
         employed_fitnesses = [
             self.swarm_state.particles[i].fitness for i in range(self.employed_count)
         ]
+
+        # Safety check: if no employed bees, skip onlooker phase
+        if not employed_fitnesses:
+            return
 
         # Convert fitness to probability (lower fitness = higher probability)
         max_fitness = max(employed_fitnesses) if employed_fitnesses else 1.0
