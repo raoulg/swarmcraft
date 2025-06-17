@@ -11,6 +11,13 @@ class SessionStatus(Enum):
     COMPLETED = "completed"
 
 
+class AlgorithmType(Enum):
+    """Supported swarm optimization algorithms."""
+
+    PSO = "pso"
+    ABC = "abc"
+
+
 class Participant(BaseModel):
     id: str
     name: str
@@ -22,6 +29,7 @@ class Participant(BaseModel):
 
 
 class SessionConfig(BaseModel):
+    # Existing fields (unchanged)
     landscape_type: str = "rastrigin"
     landscape_params: Dict = {}
     grid_size: int = 25
@@ -29,6 +37,13 @@ class SessionConfig(BaseModel):
     exploration_probability: float = 0.15
     min_exploration_probability: Optional[float] = None
     max_iterations: int = 10
+
+    # NEW: Algorithm selection (using enum for safety)
+    algorithm_type: AlgorithmType = AlgorithmType.PSO
+
+    # NEW: ABC-specific parameters (optional, with sensible defaults)
+    abc_limit: Optional[int] = 10  # Abandonment limit for ABC
+    abc_employed_ratio: Optional[float] = 0.5  # Fraction of employed bees
 
 
 class GameSession(BaseModel):
