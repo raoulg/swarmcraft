@@ -243,3 +243,53 @@ class ABC(SwarmOptimizer):
     def get_pso_statistics(self) -> dict:
         """Alias for get_abc_statistics to maintain compatibility."""
         return self.get_abc_statistics()
+
+    def suggest_next_position(self, particle_id: str) -> Optional[List[float]]:
+        """
+        Suggest next position for a particle without updating the swarm.
+
+        For ABC, this simulates the employed bee or onlooker bee behavior
+        depending on the particle's current role.
+        """
+        particle = self.get_particle_by_id(particle_id)
+        if not particle:
+            return None
+
+        # Find particle index to determine role
+        particle_index = None
+        for i, p in enumerate(self.swarm_state.particles):
+            if p.id == particle_id:
+                particle_index = i
+                break
+
+        if particle_index is None:
+            return None
+
+        if particle_index < self.employed_count:
+            # Employed bee: suggest position based on current food source exploration
+            candidate = self._generate_candidate_solution(
+                particle.position_array, particle_index
+            )
+            return candidate.tolist()
+        else:
+            # Onlooker bee: suggest position based on best employed bee sources
+            employed_fitnesses = [
+                self.swarm_state.particles[i].fitness
+                for i in range(self.employed_count)
+            ]
+
+            if employed_fitnesses:
+                # Choose best employed bee to follow
+                best_employed_idx = min(
+                    range(len(employed_fitnesses)), key=lambda i: employed_fitnesses[i]
+                )
+                best_employed = self.swarm_state.particles[best_employed_idx]
+
+                # Suggest position near the best employed bee
+                candidate = self._generate_candidate_solution(
+                    best_employed.position_array, best_employed_idx
+                )
+                return candidate.tolist()
+            else:
+                # Fallback: random position
+                return self._generate_random_position().tolist()
