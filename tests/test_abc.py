@@ -394,6 +394,59 @@ class TestABC:
         # Test non-existent particle
         assert abc.suggest_next_position("nonexistent") is None
 
+    def test_abc_edge_case_single_participant(self):
+        """Test ABC with single participant (edge case that caused division by zero)."""
+
+        def simple_loss(x):
+            return np.sum(x**2)
+
+        # This used to cause division by zero: 1 participant with 0.6 ratio = 0 employed bees
+        abc = ABC(
+            dimensions=2,
+            bounds=[(-5, 5), (-5, 5)],
+            loss_function=simple_loss,
+            population_size=1,
+            employed_ratio=0.6,  # Would give 0 employed bees without the fix
+            random_seed=42,
+        )
+
+        # Should have at least 1 employed bee
+        assert abc.employed_count >= 1
+        assert abc.onlooker_count >= 0
+        assert abc.employed_count + abc.onlooker_count == 1
+
+        # Should be able to perform a step without errors
+        abc.step()
+        assert abc.swarm_state.iteration == 1
+
+    def test_abc_minimum_employed_bees(self):
+        """Test that ABC always has at least 1 employed bee."""
+
+        def simple_loss(x):
+            return np.sum(x**2)
+
+        # Test various small population sizes
+        for pop_size in [1, 2, 3]:
+            for ratio in [0.1, 0.3, 0.5]:
+                abc = ABC(
+                    dimensions=2,
+                    bounds=[(-5, 5), (-5, 5)],
+                    loss_function=simple_loss,
+                    population_size=pop_size,
+                    employed_ratio=ratio,
+                    random_seed=42,
+                )
+
+                # Should always have at least 1 employed bee
+                assert abc.employed_count >= 1
+                assert abc.employed_count <= pop_size
+                assert abc.onlooker_count >= 0
+                assert abc.employed_count + abc.onlooker_count == pop_size
+
+                # Should work without errors
+                abc.step()
+                assert abc.swarm_state.iteration == 1
+
 
 # Additional fixture for ABC testing
 @pytest.fixture
