@@ -20,6 +20,7 @@ from swarmcraft.core.loss_functions import create_landscape
 from swarmcraft.core.swarm_base import SwarmState, Particle
 from swarmcraft.core.pso import PSO
 from swarmcraft.api.websocket import websocket_manager
+from swarmcraft.core.algorithm_factory import create_optimizer
 from loguru import logger
 
 router = APIRouter()
@@ -262,21 +263,20 @@ async def make_move(
             status_code=400, detail="Moves can only be made in an active session."
         )
 
-    # 2. HYDRATE a temporary PSO "calculator" with the loaded state.
+    # 2. HYDRATE a temporary optimizer "calculator" with the loaded state.
     landscape = create_landscape(
         session.config.landscape_type, **session.config.landscape_params
     )
-    pso = PSO(
-        dimensions=2,
-        bounds=landscape.metadata.recommended_bounds,
-        loss_function=landscape.evaluate,
-        population_size=len(session.participants),
-        max_iterations=session.config.max_iterations,
-        exploration_probability=session.config.exploration_probability,
-        min_exploration_probability=session.config.min_exploration_probability,
+
+    # CHANGED: Use factory instead of hardcoded PSO
+    optimizer = create_optimizer(
+        config=session.config,
+        participants_count=len(session.participants),
+        landscape=landscape,
     )
+
     # This is the crucial step: restoring the full state of the swarm.
-    pso.swarm_state = swarm_state
+    optimizer.swarm_state = swarm_state
 
     # 3. Find the correct internal particle ID for the participant making the move.
     participant_index = next(
@@ -289,17 +289,24 @@ async def make_move(
     )
     if participant_index == -1:
         raise HTTPException(status_code=404, detail="Participant not found")
-    pso_particle_id = f"particle_{participant_index}"
+    optimizer_particle_id = f"particle_{participant_index}"
 
     # 4. MUTATE the state by calculating the particle's next move.
-    suggested_cont_pos = pso.suggest_next_position(pso_particle_id)
+    if hasattr(optimizer, "suggest_next_position"):
+        suggested_cont_pos = optimizer.suggest_next_position(optimizer_particle_id)
+    else:
+        # Fallback for optimizers that don't have suggest_next_position
+        raise HTTPException(
+            status_code=500, detail="Optimizer does not support position suggestions."
+        )
+
     if suggested_cont_pos is None:
         raise HTTPException(
             status_code=500, detail="Could not calculate next position."
         )
 
     # 5. Update the state of the specific particle within the swarm_state object.
-    particle_to_update = pso.get_particle_by_id(pso_particle_id)
+    particle_to_update = optimizer.get_particle_by_id(optimizer_particle_id)
     new_fitness = landscape.evaluate(np.array(suggested_cont_pos))
     velocity_mag = 0.0
     if particle_to_update:
@@ -323,13 +330,13 @@ async def make_move(
     # 8. SAVE both updated states back to Redis.
     await set_json(
         f"session:{session_id}",
-        session.model_dump(mode="json"),
+        session.model_dump(mode="json"),  # CHANGED: use mode="json"
         redis_conn,
         expire=86400,
     )
     await set_json(
         f"swarm_state:{session_id}",
-        pso.swarm_state.model_dump(mode="json"),
+        optimizer.swarm_state.model_dump(mode="json"),  # CHANGED: use mode="json"
         redis_conn,
         expire=86400,
     )
@@ -368,45 +375,48 @@ async def trigger_swarm_step(
     landscape = create_landscape(
         session.config.landscape_type, **session.config.landscape_params
     )
-    pso = PSO(
-        dimensions=2,
-        bounds=landscape.metadata.recommended_bounds,
-        loss_function=landscape.evaluate,
-        population_size=len(session.participants),
-        max_iterations=session.config.max_iterations,
-        exploration_probability=session.config.exploration_probability,
-        min_exploration_probability=session.config.min_exploration_probability,
+
+    # CHANGED: Use factory instead of hardcoded PSO
+    optimizer = create_optimizer(
+        config=session.config,
+        participants_count=len(session.participants),
+        landscape=landscape,
     )
-    pso.swarm_state = swarm_state
+    optimizer.swarm_state = swarm_state
 
-    pso.step()
+    optimizer.step()
 
-    updated_participants = pso.sync_participants_from_swarm(
+    updated_participants = optimizer.sync_participants_from_swarm(
         participants=session.participants, grid_size=session.config.grid_size
     )
     session.participants = updated_participants
-    session.swarm_iteration = pso.swarm_state.iteration
+    session.swarm_iteration = optimizer.swarm_state.iteration
 
-    stats = pso.get_pso_statistics()
+    # Get algorithm-appropriate statistics
+    if hasattr(optimizer, "get_pso_statistics"):
+        stats = optimizer.get_pso_statistics()  # PSO has detailed stats
+    elif hasattr(optimizer, "get_abc_statistics"):
+        stats = optimizer.get_abc_statistics()  # ABC has detailed stats
+    else:
+        stats = optimizer.get_swarm_statistics()  # Fallback to base stats
 
     await set_json(
         f"session:{session_id}",
-        session.model_dump(mode="json"),
+        session.model_dump(mode="json"),  # CHANGED: use mode="json"
         redis_conn,
         expire=86400,
     )
     await set_json(
         f"swarm_state:{session_id}",
-        pso.swarm_state.model_dump(mode="json"),
+        optimizer.swarm_state.model_dump(mode="json"),  # CHANGED: use mode="json"
         redis_conn,
         expire=86400,
     )
 
-    # --- THIS IS THE FIX ---
-    # Manually build the participant list, adding the calculated color
+    # Build the participant list with colors
     participants_with_color = []
     for p in updated_participants:
-        p_dict = p.model_dump(mode="json")
+        p_dict = p.model_dump(mode="json")  # CHANGED: use mode="json"
         p_dict["color"] = (
             landscape.get_fitness_color(p.fitness, p.velocity_magnitude)
             if p.fitness is not None
@@ -417,16 +427,18 @@ async def trigger_swarm_step(
     swarm_update_message = {
         "type": "swarm_update",
         "iteration": session.swarm_iteration,
-        "participants": participants_with_color,  # Use the list with colors
+        "participants": participants_with_color,
         "statistics": {
             "global_best_fitness": stats["global_best_fitness"],
-            "explorers": stats["exploration_stats"]["explorers"],
-            "exploration_probability": stats["current_exploration_probability"],
+            # CHANGED: Handle different statistics based on algorithm
+            "explorers": stats.get("exploration_stats", {}).get("explorers", 0),
+            "exploration_probability": stats.get(
+                "current_exploration_probability", 0.0
+            ),
         },
         "timestamp": datetime.now().isoformat(),
     }
     await websocket_manager.broadcast_to_session(swarm_update_message, session_id)
-    # -----------------------
 
     return {"message": f"Swarm step {session.swarm_iteration} executed successfully."}
 
@@ -453,52 +465,45 @@ async def start_session(
     session.status = SessionStatus.ACTIVE
     session.started_at = datetime.now()
 
-    # 2. CREATE the PSO instance (our temporary "calculator").
-    #    It will initialize its own internal SwarmState with random positions.
+    # 2. CREATE the optimizer using the factory (CHANGED: was hardcoded PSO)
     landscape = create_landscape(
         session.config.landscape_type, **session.config.landscape_params
     )
-    pso = PSO(
-        dimensions=2,
-        bounds=landscape.metadata.recommended_bounds,
-        loss_function=landscape.evaluate,
-        population_size=len(session.participants),
-        max_iterations=session.config.max_iterations,
-        exploration_probability=session.config.exploration_probability,
-        min_exploration_probability=session.config.min_exploration_probability,
+
+    optimizer = create_optimizer(
+        config=session.config,
+        participants_count=len(session.participants),
+        landscape=landscape,
     )
 
     # 3. SYNC the game state with the newly created swarm state.
-    #    The PSO object updates the list of participants with their assigned positions.
-    session.participants = pso.sync_participants_from_swarm(
+    session.participants = optimizer.sync_participants_from_swarm(
         participants=session.participants, grid_size=session.config.grid_size
     )
 
-    # 4. SAVE the updated states back to Redis (our "source of truth").
-    #    We save both the GameSession (with updated participant positions)
-    #    and the full SwarmState (with velocities, personal bests, etc.).
+    # 4. SAVE the updated states back to Redis
     await set_json(
         f"session:{session_id}",
-        session.model_dump(mode="json"),
+        session.model_dump(
+            mode="json"
+        ),  # CHANGED: use mode="json" for enum serialization
         redis_conn,
         expire=86400,
     )
     await set_json(
         f"swarm_state:{session_id}",
-        pso.swarm_state.model_dump(mode="json"),
+        optimizer.swarm_state.model_dump(mode="json"),  # CHANGED: use mode="json"
         redis_conn,
         expire=86400,
     )
 
     # 5. NOTIFY clients that the game is on!
-    # First, send a simple "started" message.
     await websocket_manager.broadcast_to_session(
         {
             "type": "session_started",
             "message": "The swarm optimization has begun! You have been assigned a starting position.",
             "timestamp": datetime.now().isoformat(),
-            # Include the initial state in the start message itself for efficiency
-            "session": session.model_dump(mode="json"),
+            "session": session.model_dump(mode="json"),  # CHANGED: use mode="json"
         },
         session_id,
     )
