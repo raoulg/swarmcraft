@@ -8,7 +8,8 @@ import numpy as np
 from swarmcraft.database.redis_client import get_redis, get_json, set_json
 from swarmcraft.models.session import GameSession, SessionStatus
 from swarmcraft.core.loss_functions import create_landscape
-from swarmcraft.core.pso import PSO
+from swarmcraft.core.algorithm_factory import create_optimizer
+from swarmcraft.core.swarm_base import SwarmOptimizer
 
 
 class ConnectionManager:
@@ -16,7 +17,7 @@ class ConnectionManager:
         # session_id -> {participant_id -> websocket}
         self.active_connections: Dict[str, Dict[str, WebSocket]] = {}
         # session_id -> PSO instance
-        self.active_swarms: Dict[str, PSO] = {}
+        self.active_swarms: Dict[str, SwarmOptimizer] = {}
 
     async def connect(self, websocket: WebSocket, session_id: str, participant_id: str):
         """Connect a participant to a session"""
@@ -279,15 +280,12 @@ class ConnectionManager:
 
                 return landscape.evaluate([x, y])
 
-            self.active_swarms[session_id] = PSO(
-                dimensions=2,
-                bounds=bounds,
-                loss_function=discrete_landscape_func,
-                population_size=len(session.participants),
-                max_iterations=session.config.max_iterations,
-                exploration_probability=session.config.exploration_probability,
-                min_exploration_probability=session.config.min_exploration_probability,
+            self.active_swarms[session_id] = create_optimizer(
+                config=session.config,
+                participants_count=len(session.participants),
+                landscape=landscape,
             )
+            self.active_swarms[session_id].loss_function = discrete_landscape_func
 
         swarm = self.active_swarms[session_id]
 
@@ -323,7 +321,12 @@ class ConnectionManager:
         session.swarm_iteration += 1
 
         # Get swarm statistics
-        stats = swarm.get_pso_statistics()
+        if hasattr(swarm, "get_pso_statistics"):
+            stats = swarm.get_pso_statistics()  # PSO or ABC with PSO compatibility
+        elif hasattr(swarm, "get_abc_statistics"):
+            stats = swarm.get_abc_statistics()  # ABC-specific stats
+        else:
+            stats = swarm.get_swarm_statistics()
 
         # Save updated session
         await set_json(
@@ -343,9 +346,13 @@ class ConnectionManager:
                 "particle": stats["global_best_particle"],
             },
             "statistics": {
-                "diversity": stats["diversity"],
-                "explorers": stats["exploration_stats"]["explorers"],
-                "mean_fitness": stats["fitness_stats"]["mean"],
+                "diversity": stats.get("diversity", 0.0),
+                "explorers": stats.get("exploration_stats", {}).get(
+                    "explorers", stats.get("bee_distribution", {}).get("scout_bees", 0)
+                ),
+                "mean_fitness": stats.get("fitness_stats", {}).get(
+                    "mean", stats.get("global_best_fitness", 0.0)
+                ),
             },
             "timestamp": datetime.now().isoformat(),
         }
