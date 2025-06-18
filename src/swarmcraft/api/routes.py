@@ -21,6 +21,11 @@ from swarmcraft.core.swarm_base import SwarmState, Particle
 from swarmcraft.core.pso import PSO
 from swarmcraft.api.websocket import websocket_manager
 from swarmcraft.core.algorithm_factory import create_optimizer
+from swarmcraft.models.session import AlgorithmType
+from swarmcraft.core.algorithm_factory import (
+    get_algorithm_display_name,
+    get_algorithm_description,
+)
 from loguru import logger
 
 router = APIRouter()
@@ -687,3 +692,68 @@ async def trigger_reveal(
     await websocket_manager.broadcast_to_session(reveal_message, session_id)
 
     return {"message": "Fitness reveal triggered successfully."}
+
+
+# Add this new route to your src/swarmcraft/api/routes.py file
+
+
+@router.get("/algorithms")
+async def get_available_algorithms():
+    """Get list of available swarm algorithms with their parameter schemas"""
+
+    algorithms = []
+    for algo_type in AlgorithmType:
+        algorithms.append(
+            {
+                "id": algo_type.value,
+                "name": get_algorithm_display_name(algo_type),
+                "description": get_algorithm_description(algo_type),
+                "parameter_schema": _get_algorithm_parameter_schema(algo_type),
+            }
+        )
+
+    return {"algorithms": algorithms}
+
+
+def _get_algorithm_parameter_schema(algorithm_type: AlgorithmType) -> dict:
+    """Get the parameter schema (not values) for each algorithm type"""
+    if algorithm_type == AlgorithmType.PSO:
+        return {
+            "exploration_probability": {
+                "type": "number",
+                "default": 0.3,
+                "min": 0.0,
+                "max": 1.0,
+                "step": 0.1,
+                "description": "Initial probability of random exploration",
+            },
+            "min_exploration_probability": {
+                "type": "number",
+                "default": 0.1,
+                "min": 0.0,
+                "max": 1.0,
+                "step": 0.1,
+                "description": "Minimum exploration probability (annealing target)",
+            },
+        }
+    elif algorithm_type == AlgorithmType.ABC:
+        return {
+            "abc_limit": {
+                "type": "integer",
+                "default": 10,
+                "min": 1,
+                "max": 50,
+                "step": 1,
+                "description": "Abandonment limit for food sources",
+            },
+            "abc_employed_ratio": {
+                "type": "number",
+                "default": 0.5,
+                "min": 0.1,
+                "max": 0.9,
+                "step": 0.1,
+                "description": "Ratio of employed bees to total population",
+            },
+        }
+    else:
+        return {}

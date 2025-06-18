@@ -158,7 +158,7 @@ class ConnectionManager:
                 "code": session.code,
                 "status": session.status.value,
                 "participants": participants_list,  # Use the reliably created list
-                "config": session.config.model_dump(),
+                "config": session.config.model_dump(mode="json"),
                 "iteration": session.swarm_iteration,
             },
             "timestamp": datetime.now().isoformat(),
