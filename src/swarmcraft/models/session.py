@@ -32,7 +32,7 @@ class SessionConfig(BaseModel):
     # Existing fields (unchanged)
     landscape_type: str = "rastrigin"
     landscape_params: Dict = {}
-    grid_size: int = 25
+    grid_size: int = 100
     max_participants: int = 30
     exploration_probability: float = 0.15
     min_exploration_probability: Optional[float] = None
