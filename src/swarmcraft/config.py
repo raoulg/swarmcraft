@@ -5,7 +5,7 @@ This module contains all centralized configuration values.
 """
 
 # Grid configuration
-DEFAULT_GRID_SIZE = 10
+DEFAULT_GRID_SIZE = 25
 """Default size of the grid (NxN). This should be the ONLY place this value is defined."""
 
 # Session configuration

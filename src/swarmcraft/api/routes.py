@@ -748,6 +748,67 @@ async def trigger_reveal(
     return {"message": "Fitness reveal triggered successfully."}
 
 
+@router.get("/session/{session_id}/landscape")
+async def get_session_landscape(
+    session_id: str, resolution: int = 100, redis_conn=Depends(get_redis)
+):
+    """
+    Get the landscape values for visualization.
+    Returns a flattened array of values matching the frontend grid (row-major).
+    """
+    session_data = await get_json(f"session:{session_id}", redis_conn)
+    if not session_data:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    session = GameSession(**session_data)
+
+    landscape = create_landscape(
+        session.config.landscape_type,
+        grid_size=session.config.grid_size,
+        **session.config.landscape_params,
+    )
+
+    bounds = landscape.metadata.recommended_bounds
+
+    x_min, x_max = bounds[0]
+    y_min, y_max = bounds[1]
+
+    # Use the requested resolution for visualization, not the game grid size
+    viz_grid_size = resolution
+
+    x_step = (x_max - x_min) / viz_grid_size
+    y_step = (y_max - y_min) / viz_grid_size
+
+    values = []
+
+    # Calculate values for each cell to match frontend grid order
+    # Frontend iterates i from 0 to grid_size*grid_size - 1
+    # row = floor(i / grid_size) (0 is top)
+    # col = i % grid_size (0 is left)
+    for i in range(viz_grid_size * viz_grid_size):
+        visual_row = i // viz_grid_size
+        visual_col = i % viz_grid_size
+
+        # Convert to logical grid coordinates and then continuous space
+        # Visual row 0 (top) -> Logical Y (grid_size - 1)
+        logical_y_idx = viz_grid_size - 1 - visual_row
+        logical_x_idx = visual_col
+
+        # Center of the cell
+        x = x_min + (logical_x_idx + 0.5) * x_step
+        y = y_min + (logical_y_idx + 0.5) * y_step
+
+        val = landscape.evaluate(np.array([x, y]))
+        values.append(float(val))
+
+    return {
+        "grid_size": viz_grid_size,
+        "values": values,
+        "min_value": min(values),
+        "max_value": max(values),
+    }
+
+
 # Add this new route to your src/swarmcraft/api/routes.py file
 
 

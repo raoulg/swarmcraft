@@ -14,6 +14,7 @@ from plotly.subplots import make_subplots
 from typing import List, Tuple, Optional, Dict, Any, Callable
 
 from swarmcraft.core.loss_functions import OptimizationLandscape
+from swarmcraft.config import DEFAULT_GRID_SIZE
 
 
 class LandscapeVisualizer:
@@ -58,7 +59,7 @@ class LandscapeVisualizer:
             contour_levels: Number of contour levels
             show_heatmap: Whether to show heatmap background
             show_grid: Whether to overlay discrete grid
-            grid_size: Size of discrete grid (e.g., 25 for 25x25)
+            grid_size: Size of discrete grid (e.g., default from config)
             show_grid_values: Whether to show loss values at grid centers
             save_path: Optional path to save HTML file
 
@@ -686,7 +687,7 @@ class LandscapeVisualizer:
         self,
         landscape: OptimizationLandscape,
         bounds: Optional[List[Tuple[float, float]]] = None,
-        grid_size: int = 25,
+        grid_size: int = DEFAULT_GRID_SIZE,
         show_continuous: bool = True,
         save_path: Optional[str] = None,
     ) -> go.Figure:
@@ -760,7 +761,7 @@ class LandscapeVisualizer:
         Args:
             fig: Plotly figure to modify
             bounds: Coordinate bounds
-            grid_size: Size of grid (e.g., 25 for 25x25)
+            grid_size: Size of grid (e.g., default from config)
             landscape: Landscape for evaluating grid center values
             show_values: Whether to show loss values at grid centers
         """
@@ -852,7 +853,7 @@ class LandscapeVisualizer:
         self,
         landscape: OptimizationLandscape,
         bounds: Optional[List[Tuple[float, float]]] = None,
-        grid_size: int = 25,
+        grid_size: int = DEFAULT_GRID_SIZE,
     ) -> Callable:
         """
         Create a discrete version of a continuous landscape function.
@@ -924,7 +925,7 @@ def quick_visualize(
         landscape_name: Name of landscape to create and visualize
         plot_type: Type of plot ('2d', '3d', 'cross', 'dashboard', 'discrete')
         show_grid: Whether to show discrete grid overlay
-        grid_size: Size of discrete grid (e.g., 25 for 25x25)
+        grid_size: Size of discrete grid (e.g., default from config)
         **landscape_kwargs: Arguments for landscape creation
 
     Returns:
@@ -933,7 +934,7 @@ def quick_visualize(
     from swarmcraft.core.loss_functions import create_landscape
 
     landscape = create_landscape(
-        landscape_name, grid_size=grid_size or 25, **landscape_kwargs
+        landscape_name, grid_size=grid_size or DEFAULT_GRID_SIZE, **landscape_kwargs
     )
     visualizer = LandscapeVisualizer()
 
@@ -954,7 +955,9 @@ def quick_visualize(
     elif plot_type == "dashboard":
         return visualizer.create_dashboard(landscape)
     elif plot_type == "discrete":
-        return visualizer.plot_discrete_landscape(landscape, grid_size=grid_size or 25)
+        return visualizer.plot_discrete_landscape(
+            landscape, grid_size=grid_size or DEFAULT_GRID_SIZE
+        )
     else:
         raise ValueError(
             f"Unknown plot type: {plot_type}. Use '2d', '3d', 'cross', 'dashboard', or 'discrete'."
