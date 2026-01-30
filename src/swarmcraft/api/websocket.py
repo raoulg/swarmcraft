@@ -168,7 +168,9 @@ class ConnectionManager:
         session = GameSession(**session_data)
 
         landscape = create_landscape(
-            session.config.landscape_type, **session.config.landscape_params
+            session.config.landscape_type,
+            grid_size=session.config.grid_size,
+            **session.config.landscape_params,
         )
 
         # --- START of Corrected Logic ---
@@ -233,7 +235,9 @@ class ConnectionManager:
 
         # Calculate fitness
         landscape = create_landscape(
-            session.config.landscape_type, **session.config.landscape_params
+            session.config.landscape_type,
+            grid_size=session.config.grid_size,
+            **session.config.landscape_params,
         )
 
         # Convert grid to continuous coordinates
@@ -242,8 +246,8 @@ class ConnectionManager:
         y_min, y_max = bounds[1]
         grid_size = session.config.grid_size
 
-        x = x_min + (position[1] + 0.5) * (x_max - x_min) / grid_size
-        y = y_min + (position[0] + 0.5) * (y_max - y_min) / grid_size
+        x = x_min + (position[0] + 0.5) * (x_max - x_min) / grid_size
+        y = y_min + (position[1] + 0.5) * (y_max - y_min) / grid_size
 
         fitness = landscape.evaluate([x, y])
         participant.fitness = fitness
@@ -298,7 +302,9 @@ class ConnectionManager:
         # Initialize or get existing swarm
         if session_id not in self.active_swarms:
             landscape = create_landscape(
-                session.config.landscape_type, **session.config.landscape_params
+                session.config.landscape_type,
+                grid_size=session.config.grid_size,
+                **session.config.landscape_params,
             )
 
             # Create discrete version of landscape
@@ -330,7 +336,9 @@ class ConnectionManager:
             if participant.position and i < len(swarm.swarm_state.particles):
                 # Convert grid coordinates to continuous
                 landscape = create_landscape(
-                    session.config.landscape_type, **session.config.landscape_params
+                    session.config.landscape_type,
+                    grid_size=session.config.grid_size,
+                    **session.config.landscape_params,
                 )
                 bounds = landscape.metadata.recommended_bounds
                 x_min, x_max = bounds[0]
@@ -339,11 +347,11 @@ class ConnectionManager:
 
                 x = (
                     x_min
-                    + (participant.position[1] + 0.5) * (x_max - x_min) / grid_size
+                    + (participant.position[0] + 0.5) * (x_max - x_min) / grid_size
                 )
                 y = (
                     y_min
-                    + (participant.position[0] + 0.5) * (y_max - y_min) / grid_size
+                    + (participant.position[1] + 0.5) * (x_max - x_min) / grid_size
                 )
 
                 # Update particle position

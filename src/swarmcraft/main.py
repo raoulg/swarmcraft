@@ -79,7 +79,11 @@ async def health_check():
     try:
         from swarmcraft.core.loss_functions import create_landscape
 
-        _ = create_landscape("rastrigin", A=10.0, dimensions=2)
+        from swarmcraft.config import DEFAULT_GRID_SIZE
+
+        _ = create_landscape(
+            "rastrigin", grid_size=DEFAULT_GRID_SIZE, A=10.0, dimensions=2
+        )
         health_status["services"]["landscapes"] = {"status": "functional"}
     except Exception as e:
         health_status["status"] = "unhealthy"

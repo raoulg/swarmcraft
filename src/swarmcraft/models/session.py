@@ -2,6 +2,13 @@ from pydantic import BaseModel
 from typing import List, Dict, Optional
 from datetime import datetime
 from enum import Enum
+from swarmcraft.config import (
+    DEFAULT_GRID_SIZE,
+    DEFAULT_MAX_PARTICIPANTS,
+    DEFAULT_MAX_ITERATIONS,
+    DEFAULT_EXPLORATION_PROBABILITY,
+    DEFAULT_LANDSCAPE_TYPE,
+)
 
 
 class SessionStatus(Enum):
@@ -23,6 +30,9 @@ class Participant(BaseModel):
     name: str
     emojis: Optional[List[str]] = []
     position: Optional[List[int]] = None  # Grid coordinates [i, j]
+    continuous_position: Optional[List[float]] = (
+        None  # Actual continuous coordinates [x, y]
+    )
     fitness: Optional[float] = None
     velocity_magnitude: Optional[float] = None
     connected: bool = True
@@ -31,13 +41,13 @@ class Participant(BaseModel):
 
 class SessionConfig(BaseModel):
     # Existing fields (unchanged)
-    landscape_type: str = "rastrigin"
+    landscape_type: str = DEFAULT_LANDSCAPE_TYPE
     landscape_params: Dict = {}
-    grid_size: int = 25
-    max_participants: int = 30
-    exploration_probability: float = 0.15
+    grid_size: int = DEFAULT_GRID_SIZE
+    max_participants: int = DEFAULT_MAX_PARTICIPANTS
+    exploration_probability: float = DEFAULT_EXPLORATION_PROBABILITY
     min_exploration_probability: Optional[float] = None
-    max_iterations: int = 10
+    max_iterations: int = DEFAULT_MAX_ITERATIONS
 
     # NEW: Algorithm selection (using enum for safety)
     algorithm_type: AlgorithmType = AlgorithmType.PSO

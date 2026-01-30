@@ -1,7 +1,7 @@
 """
 Loss functions for swarm optimization with human interaction.
 
-This module provides various optimization landscapes designed for experiential
+j́his module provides various optimization landscapes designed for experiential
 learning about swarm intelligence, local minima, and collective optimization.
 Each function is designed to create meaningful human experiences while
 maintaining mathematical rigor.
@@ -13,6 +13,7 @@ from abc import ABC, abstractmethod
 from typing import List, Tuple, Dict, Any, Optional
 from pydantic import BaseModel, Field
 from enum import Enum
+from loguru import logger
 
 
 class LandscapeType(Enum):
@@ -151,31 +152,45 @@ class QuadraticLandscape(OptimizationLandscape):
     Simple quadratic function - a smooth bowl perfect for testing convergence.
     """
 
-    def __init__(self, dimensions: int = 2):
+    def __init__(self, grid_size: int, dimensions: int = 2):
         self.dimensions = dimensions
+        self.grid_size = grid_size
+        # Center is at the middle of the grid
+        self.center = np.array([grid_size / 2] * dimensions)
         super().__init__()
 
     def _create_metadata(self) -> LandscapeMetadata:
-        bounds = [(-10.0, 10.0)] * self.dimensions
+        # Bounds now match the grid size
+        bounds = [(0.0, float(self.grid_size))] * self.dimensions
+
+        global_min = [self.grid_size / 2] * self.dimensions  # Center of grid
+        logger.info(f"Using bounds: {bounds}, global_min: {global_min}")
+
         return LandscapeMetadata(
             name="Quadratic Bowl",
-            description="A simple, smooth, convex function with a single global minimum at the origin.",
+            description="A simple, smooth, convex function with a single global minimum at the center.",
             landscape_type=LandscapeType.MATHEMATICAL,
             dimensions=self.dimensions,
             recommended_bounds=bounds,
-            global_minimum=[0.0] * self.dimensions,
+            global_minimum=global_min,
             global_minimum_value=0.0,
             local_minima_count=0,
             difficulty_level=1,
-            story_context="This is a simple test landscape. Find the bottom of the bowl!",
+            story_context="This is a simple test landscape. Find the bottom of the bowl at the center!",
             axis_labels=["X", "Y"] if self.dimensions == 2 else None,
         )
 
     def evaluate(self, position: np.ndarray | list[float]) -> float:
-        """Evaluates f(x) = Σ(x_i^2)"""
+        """Evaluates f(x) = Σ((x_i - center_i)^2)"""
         if isinstance(position, list):
             position = np.array(position)
-        return np.sum(position**2)
+        # Shift so minimum is at center
+        shifted = position - self.center
+        result = np.sum(shifted**2)
+        logger.debug(
+            f"using position: {position}, shifted: {shifted}, result: {result}"
+        )
+        return result
 
 
 class RastriginLandscape(OptimizationLandscape):
@@ -186,31 +201,40 @@ class RastriginLandscape(OptimizationLandscape):
     making it perfect for demonstrating the exploration vs exploitation dilemma.
     """
 
-    def __init__(self, A: float = 10.0, dimensions: int = 2):
+    def __init__(self, grid_size: int, A: float = 10.0, dimensions: int = 2):
         """
         Initialize Rastrigin landscape.
 
         Args:
+            grid_size: Size of the grid (bounds will be [0, grid_size])
             A: Amplitude parameter (higher = more local minima)
             dimensions: Number of dimensions
         """
         self.A = A
         self.dimensions = dimensions
+        self.grid_size = grid_size
+        # Center is at the middle of the grid
+        self.center = np.array([grid_size / 2] * dimensions)
+        # Scale factor to map grid coordinates to standard Rastrigin range
+        # Standard Rastrigin uses [-5.12, 5.12], so we scale to that range
+        self.scale = 10.24 / grid_size  # 10.24 = 5.12 * 2
         super().__init__()
 
     def _create_metadata(self) -> LandscapeMetadata:
-        bounds = [(-5.12, 5.12)] * self.dimensions
+        # Bounds now match the grid size
+        bounds = [(0.0, float(self.grid_size))] * self.dimensions
+        global_min = [self.grid_size / 2] * self.dimensions  # Center of grid
         return LandscapeMetadata(
             name="Rastrigin Function",
-            description="A highly multimodal function with many local minima and one global minimum at origin",
+            description="A highly multimodal function with many local minima and one global minimum at center",
             landscape_type=LandscapeType.MATHEMATICAL,
             dimensions=self.dimensions,
             recommended_bounds=bounds,
-            global_minimum=[0.0] * self.dimensions,
+            global_minimum=global_min,
             global_minimum_value=0.0,
             local_minima_count=int(5**self.dimensions),  # Approximate
             difficulty_level=4,
-            story_context="Navigate through a landscape of mathematical peaks and valleys to find the single point of perfect harmony.",
+            story_context="Navigate through a landscape of mathematical peaks and valleys to find the single point of perfect harmony at the center.",
             axis_labels=["X Coordinate", "Y Coordinate"]
             if self.dimensions == 2
             else None,
@@ -220,23 +244,25 @@ class RastriginLandscape(OptimizationLandscape):
         """
         Evaluate Rastrigin function.
 
-        f(x) = A*n + Σ[x_i² - A*cos(2π*x_i)]
+        f(x) = A*n + Σ[(x_i - center_i)² - A*cos(2π*(x_i - center_i)*scale)]
         """
         if isinstance(position, list):
             position = np.array(position)
+        # Shift to center and scale to standard Rastrigin range
+        shifted = (position - self.center) * self.scale
         n = len(position)
-        return self.A * n + np.sum(position**2 - self.A * np.cos(2 * np.pi * position))
+        return self.A * n + np.sum(shifted**2 - self.A * np.cos(2 * np.pi * shifted))
 
     def describe_position(self, position: np.ndarray) -> str:
         """Describe position in terms of the mathematical landscape."""
         fitness = self.evaluate(position)
-        distance_from_origin = np.linalg.norm(position)
+        distance_from_center = np.linalg.norm(position - self.center)
 
         if fitness < 1:
             return f"Perfect! You've found the global minimum (fitness: {fitness:.2f})"
         elif fitness < 10:
             return f"Excellent! Very close to optimal (fitness: {fitness:.2f})"
-        elif distance_from_origin < 1:
+        elif distance_from_center < 1:
             return (
                 f"Good! Near the center but in a local valley (fitness: {fitness:.2f})"
             )
@@ -255,8 +281,14 @@ class EcologicalLandscape(OptimizationLandscape):
     where local incentives lead to globally suboptimal outcomes.
     """
 
-    def __init__(self):
+    def __init__(self, grid_size: int):
         """Initialize ecological landscape."""
+        self.grid_size = grid_size
+        # Scale factor to map grid to [0, 10] range for the function
+        self.scale = 10.0 / grid_size
+        # Optimal position in grid coordinates (scaled from [6.5, 7.0])
+        self.optimal_development = 6.5 / 10.0 * grid_size  # ~65% across
+        self.optimal_regulation = 7.0 / 10.0 * grid_size  # ~70% across
         super().__init__()
 
     def _create_metadata(self) -> LandscapeMetadata:
@@ -265,12 +297,12 @@ class EcologicalLandscape(OptimizationLandscape):
             description="Balance economic growth with environmental protection to maximize long-term societal wellbeing",
             landscape_type=LandscapeType.ECOLOGICAL,
             dimensions=2,
-            recommended_bounds=[(0, 10), (0, 10)],
-            global_minimum=[6.5, 7.0],  # Moderate development, strong regulation
+            recommended_bounds=[(0, float(self.grid_size)), (0, float(self.grid_size))],
+            global_minimum=[self.optimal_development, self.optimal_regulation],
             global_minimum_value=5.0,
             local_minima_count=3,
             difficulty_level=3,
-            story_context="""You are leaders making policy decisions for your civilization. 
+            story_context="""You are leaders making policy decisions for your civilization.
             The X-axis represents Economic Development intensity.
             The Y-axis represents Environmental Regulation strength.
             Your goal is to maximize long-term societal wellbeing by finding the optimal balance.""",
@@ -288,7 +320,10 @@ class EcologicalLandscape(OptimizationLandscape):
         """
         if isinstance(position, list):
             position = np.array(position)
-        development, regulation = position[0], position[1]
+
+        # Scale grid coordinates to [0, 10] range for function evaluation
+        development = position[0] * self.scale
+        regulation = position[1] * self.scale
 
         # Economic benefit (higher development is better, but with diminishing returns)
         economic_benefit = 8 * np.log(development + 1) - 0.05 * development**2
@@ -382,13 +417,16 @@ class EcologicalLandscape(OptimizationLandscape):
 
 
 # Factory function for easy landscape creation
-def create_landscape(landscape_name: str, **kwargs) -> OptimizationLandscape:
+def create_landscape(
+    landscape_name: str, grid_size: int, **kwargs
+) -> OptimizationLandscape:
     """
     Factory function to create optimization landscapes.
 
     Args:
         landscape_name: Name of landscape to create
-        **kwargs: Parameters for landscape constructor
+        grid_size: Size of the grid (default: 25)
+        **kwargs: Additional parameters for landscape constructor
 
     Returns:
         OptimizationLandscape instance
@@ -404,6 +442,8 @@ def create_landscape(landscape_name: str, **kwargs) -> OptimizationLandscape:
             f"Unknown landscape: {landscape_name}. Available: {list(landscapes.keys())}"
         )
 
+    # Add grid_size to kwargs
+    kwargs["grid_size"] = grid_size
     return landscapes[landscape_name](**kwargs)
 
 

@@ -12,6 +12,7 @@ import numpy as np
 from pydantic import BaseModel, Field, field_validator, ConfigDict
 from enum import Enum
 from swarmcraft.models.session import Participant
+from loguru import logger
 
 
 class ParticleState(Enum):
@@ -173,6 +174,7 @@ class SwarmOptimizer(ABC):
             Initial swarm state
         """
         particles = []
+        logger.info(f"init swarm with bounds: {self.bounds}")
 
         for i in range(self.population_size):
             # Use provided position or generate random one
@@ -361,11 +363,12 @@ class SwarmOptimizer(ABC):
             col = int((x - bounds[0][0]) / (bounds[0][1] - bounds[0][0]) * grid_size)
             row = int((y - bounds[1][0]) / (bounds[1][1] - bounds[1][0]) * grid_size)
             grid_pos = [
-                max(0, min(grid_size - 1, row)),
                 max(0, min(grid_size - 1, col)),
+                max(0, min(grid_size - 1, row)),
             ]
 
             participant.position = grid_pos
+            participant.continuous_position = [float(x), float(y)]
             participant.fitness = particle.fitness
             participant.velocity_magnitude = float(
                 np.linalg.norm(particle.velocity_array)

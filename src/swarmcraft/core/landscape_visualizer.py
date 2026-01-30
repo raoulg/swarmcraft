@@ -932,7 +932,9 @@ def quick_visualize(
     """
     from swarmcraft.core.loss_functions import create_landscape
 
-    landscape = create_landscape(landscape_name, **landscape_kwargs)
+    landscape = create_landscape(
+        landscape_name, grid_size=grid_size or 25, **landscape_kwargs
+    )
     visualizer = LandscapeVisualizer()
 
     if landscape.metadata.dimensions != 2:

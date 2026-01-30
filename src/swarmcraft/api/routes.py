@@ -154,7 +154,9 @@ async def join_session(
         if swarm_state_data:
             # Create PSO instance with updated participant count
             landscape = create_landscape(
-                session.config.landscape_type, **session.config.landscape_params
+                session.config.landscape_type,
+                grid_size=session.config.grid_size,
+                **session.config.landscape_params,
             )
             pso = PSO(
                 dimensions=2,
@@ -218,7 +220,9 @@ async def join_session(
     participants_with_color = []
     if session.status == SessionStatus.ACTIVE:
         landscape = create_landscape(
-            session.config.landscape_type, **session.config.landscape_params
+            session.config.landscape_type,
+            grid_size=session.config.grid_size,
+            **session.config.landscape_params,
         )
         for p in session.participants:
             p_dict = p.model_dump(mode="json")
@@ -314,7 +318,9 @@ async def make_move(
 
     # 2. HYDRATE a temporary optimizer "calculator" with the loaded state.
     landscape = create_landscape(
-        session.config.landscape_type, **session.config.landscape_params
+        session.config.landscape_type,
+        grid_size=session.config.grid_size,
+        **session.config.landscape_params,
     )
 
     # CHANGED: Use factory instead of hardcoded PSO
@@ -369,7 +375,7 @@ async def make_move(
     new_x, new_y = suggested_cont_pos[0], suggested_cont_pos[1]
     col = int((new_x - bounds[0][0]) / (bounds[0][1] - bounds[0][0]) * grid_size)
     row = int((new_y - bounds[1][0]) / (bounds[1][1] - bounds[1][0]) * grid_size)
-    new_grid_pos = [max(0, min(grid_size - 1, row)), max(0, min(grid_size - 1, col))]
+    new_grid_pos = [max(0, min(grid_size - 1, col)), max(0, min(grid_size - 1, row))]
 
     # 7. Update the participant's info in the GameSession object.
     session.participants[participant_index].position = new_grid_pos
@@ -422,7 +428,9 @@ async def trigger_swarm_step(
         return {"message": "Swarm step skipped: session is not active."}
 
     landscape = create_landscape(
-        session.config.landscape_type, **session.config.landscape_params
+        session.config.landscape_type,
+        grid_size=session.config.grid_size,
+        **session.config.landscape_params,
     )
 
     # CHANGED: Use factory instead of hardcoded PSO
@@ -516,7 +524,9 @@ async def start_session(
 
     # 2. CREATE the optimizer using the factory (CHANGED: was hardcoded PSO)
     landscape = create_landscape(
-        session.config.landscape_type, **session.config.landscape_params
+        session.config.landscape_type,
+        grid_size=session.config.grid_size,
+        **session.config.landscape_params,
     )
 
     optimizer = create_optimizer(
