@@ -122,6 +122,12 @@ async def join_session(
                 )
                 break
 
+        # Log if reconnection failed
+        if not participant:
+            logger.warning(
+                f"Reconnection failed: participant_id {join_request.participant_id} not found in session {session_id}"
+            )
+
     # If not reconnecting, create new participant
     if not participant:
         if len(session.participants) >= session.config.max_participants:
