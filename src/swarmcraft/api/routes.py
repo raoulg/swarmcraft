@@ -11,6 +11,7 @@ from swarmcraft.models.session import (
     Participant,
     SessionStatus,
     MoveData,
+    JoinRequest,
 )
 from swarmcraft.utils.name_generator import (
     generate_participant_name,
@@ -76,10 +77,16 @@ async def create_session(
 
 
 @router.post("/join/{session_code}")
-async def join_session(session_code: str, redis_conn=Depends(get_redis)):
-    """Join a session using session code"""
+async def join_session(
+    session_code: str,
+    join_request: JoinRequest = JoinRequest(),
+    redis_conn=Depends(get_redis),
+):
+    """Join a session using session code. Supports reconnection with participant_id."""
     # Get session ID from code
-    logger.info(f"session status requested for {session_code}")
+    logger.info(
+        f"Join request for session code {session_code}, participant_id: {join_request.participant_id}"
+    )
     session_id = await redis_conn.get(f"session_code:{session_code}")
     if not session_id:
         raise HTTPException(status_code=404, detail="Invalid session code")
@@ -99,20 +106,41 @@ async def join_session(session_code: str, redis_conn=Depends(get_redis)):
             status_code=400, detail="Session not accepting participants"
         )
 
-    if len(session.participants) >= session.config.max_participants:
-        raise HTTPException(status_code=400, detail="Session full")
+    # Check if reconnecting to existing participant
+    participant = None
+    is_reconnect = False
 
-    # Create participant
-    participant_id = f"p_{len(session.participants) + 1}"
-    participant = Participant(
-        id=participant_id, name=generate_participant_name(), joined_at=datetime.now()
-    )
+    if join_request.participant_id:
+        # Try to find existing participant
+        for p in session.participants:
+            if p.id == join_request.participant_id:
+                participant = p
+                participant.connected = True
+                is_reconnect = True
+                logger.info(
+                    f"Reconnecting participant {participant.id} ({participant.name})"
+                )
+                break
 
-    # Add to session
-    session.participants.append(participant)
+    # If not reconnecting, create new participant
+    if not participant:
+        if len(session.participants) >= session.config.max_participants:
+            raise HTTPException(status_code=400, detail="Session full")
 
-    # ===== NEW: Handle active sessions =====
-    if session.status == SessionStatus.ACTIVE:
+        # Create new participant
+        participant_id = f"p_{len(session.participants) + 1}"
+        participant = Participant(
+            id=participant_id,
+            name=generate_participant_name(),
+            joined_at=datetime.now(),
+        )
+
+        # Add to session
+        session.participants.append(participant)
+        logger.info(f"Created new participant {participant.id} ({participant.name})")
+
+    # ===== Handle active sessions (only for NEW participants, not reconnects) =====
+    if session.status == SessionStatus.ACTIVE and not is_reconnect:
         # Load existing swarm state
         swarm_state_data = await get_json(f"swarm_state:{session_id}", redis_conn)
         if swarm_state_data:
@@ -197,10 +225,12 @@ async def join_session(session_code: str, redis_conn=Depends(get_redis)):
             p.model_dump(mode="json") for p in session.participants
         ]
 
+    # Broadcast participant joined/reconnected
+    message_type = "participant_reconnected" if is_reconnect else "participant_joined"
     await websocket_manager.broadcast_to_session(
         {
-            "type": "participant_joined",
-            "participant_id": participant_id,
+            "type": message_type,
+            "participant_id": participant.id,
             "participant_name": participant.name,
             "participants": participants_with_color,  # Include full updated list
             "session": session.model_dump(mode="json"),
@@ -211,11 +241,17 @@ async def join_session(session_code: str, redis_conn=Depends(get_redis)):
     logger.info(f"Session status {session.status}")
     logger.info(f"Participant count: {len(session.participants)}")
 
+    message = (
+        f"Welcome back, {participant.name}!"
+        if is_reconnect
+        else f"Welcome, {participant.name}!"
+    )
     return {
         "session_id": session_id,
-        "participant_id": participant_id,
+        "participant_id": participant.id,
         "participant_name": participant.name,
-        "message": f"Welcome, {participant.name}!",
+        "is_reconnect": is_reconnect,
+        "message": message,
     }
 
 

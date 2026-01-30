@@ -60,3 +60,11 @@ class GameSession(BaseModel):
 
 class MoveData(BaseModel):
     participant_id: str
+
+
+class JoinRequest(BaseModel):
+    """Request body for joining a session"""
+
+    participant_id: Optional[str] = (
+        None  # If provided, reconnect to existing participant
+    )

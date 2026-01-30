@@ -28,6 +28,24 @@ class ConnectionManager:
 
         self.active_connections[session_id][participant_id] = websocket
 
+        # Update participant connected status in Redis
+        redis_conn = await get_redis()
+        session_data = await get_json(f"session:{session_id}", redis_conn)
+        if session_data:
+            from swarmcraft.models.session import GameSession
+
+            session = GameSession(**session_data)
+            for p in session.participants:
+                if p.id == participant_id:
+                    p.connected = True
+                    break
+            await set_json(
+                f"session:{session_id}",
+                session.model_dump(mode="json"),
+                redis_conn,
+                expire=86400,
+            )
+
         # Send welcome message
         await self.send_personal_message(
             {
@@ -42,10 +60,10 @@ class ConnectionManager:
         # Send current session state
         await self.send_session_state(session_id, participant_id)
 
-        # Notify others about new participant
+        # Notify others about participant connection
         await self.broadcast_to_session(
             {
-                "type": "participant_joined",
+                "type": "participant_connected",
                 "participant_id": participant_id,
                 "timestamp": datetime.now().isoformat(),
             },
@@ -68,10 +86,28 @@ class ConnectionManager:
                 if session_id in self.active_swarms:
                     del self.active_swarms[session_id]
 
+        # Update participant connected status in Redis
+        redis_conn = await get_redis()
+        session_data = await get_json(f"session:{session_id}", redis_conn)
+        if session_data:
+            from swarmcraft.models.session import GameSession
+
+            session = GameSession(**session_data)
+            for p in session.participants:
+                if p.id == participant_id:
+                    p.connected = False
+                    break
+            await set_json(
+                f"session:{session_id}",
+                session.model_dump(mode="json"),
+                redis_conn,
+                expire=86400,
+            )
+
         # Notify others about disconnection
         await self.broadcast_to_session(
             {
-                "type": "participant_left",
+                "type": "participant_disconnected",
                 "participant_id": participant_id,
                 "timestamp": datetime.now().isoformat(),
             },
