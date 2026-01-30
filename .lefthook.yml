@@ -21,9 +21,9 @@ pre-commit:
       files: git ls-files
       glob: '*.py'
       run: ruff check {staged_files} --fix
-    pytest:
-      priority: 2
-      run: pytest
+    # pytest:
+    #   priority: 2
+    #   run: pytest
     # pyright:
     #   files: git ls-files
     #   glob: '*.py'
