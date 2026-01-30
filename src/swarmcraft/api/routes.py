@@ -135,9 +135,11 @@ async def join_session(
 
         # Create new participant
         participant_id = f"p_{len(session.participants) + 1}"
+        name, emojis = generate_participant_name()
         participant = Participant(
             id=participant_id,
-            name=generate_participant_name(),
+            name=name,
+            emojis=emojis,
             joined_at=datetime.now(),
         )
 

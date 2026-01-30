@@ -21,6 +21,7 @@ class AlgorithmType(Enum):
 class Participant(BaseModel):
     id: str
     name: str
+    emojis: Optional[List[str]] = []
     position: Optional[List[int]] = None  # Grid coordinates [i, j]
     fitness: Optional[float] = None
     velocity_magnitude: Optional[float] = None
