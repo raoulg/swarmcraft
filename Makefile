@@ -22,7 +22,9 @@ help:
 setup:
 	@if [ ! -f .env ]; then \
 		cp .env.example .env; \
-		echo "Created .env from example"; \
+		KEY=$$(openssl rand -hex 32 2>/dev/null || echo "fallback_key_$$(date +%s)"); \
+		sed -i.bak "s|SWARM_API_KEY=.*|SWARM_API_KEY=$$KEY|" .env && rm -f .env.bak; \
+		echo "Created .env with a unique SWARM_API_KEY"; \
 	fi
 	uv sync
 
@@ -30,7 +32,9 @@ setup:
 up:
 	@if [ ! -f .env ]; then \
 		cp .env.example .env; \
-		echo "Created .env from example"; \
+		KEY=$$(openssl rand -hex 32 2>/dev/null || echo "fallback_key_$$(date +%s)"); \
+		sed -i.bak "s|SWARM_API_KEY=.*|SWARM_API_KEY=$$KEY|" .env && rm -f .env.bak; \
+		echo "Created .env with a unique SWARM_API_KEY"; \
 	fi
 	COMPOSE_BAKE=true docker compose up
 
@@ -44,7 +48,9 @@ build:
 prod:
 	@if [ ! -f .env ]; then \
 		cp .env.example .env; \
-		echo "Created .env from example"; \
+		KEY=$$(openssl rand -hex 32 2>/dev/null || echo "fallback_key_$$(date +%s)"); \
+		sed -i.bak "s|SWARM_API_KEY=.*|SWARM_API_KEY=$$KEY|" .env && rm -f .env.bak; \
+		echo "Created .env with a unique SWARM_API_KEY"; \
 	fi
 	@echo "Building production image..."
 	docker build -f Dockerfile.prod -t swarmcraft-prod .
