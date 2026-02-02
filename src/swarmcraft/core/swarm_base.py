@@ -367,8 +367,13 @@ class SwarmOptimizer(ABC):
                 max(0, min(grid_size - 1, row)),
             ]
 
+            # Calculate normalized position [0..1]
+            norm_x = (x - bounds[0][0]) / (bounds[0][1] - bounds[0][0])
+            norm_y = (y - bounds[1][0]) / (bounds[1][1] - bounds[1][0])
+
             participant.position = grid_pos
             participant.continuous_position = [float(x), float(y)]
+            participant.normalized_position = [float(norm_x), float(norm_y)]
             participant.fitness = particle.fitness
             participant.velocity_magnitude = float(
                 np.linalg.norm(particle.velocity_array)

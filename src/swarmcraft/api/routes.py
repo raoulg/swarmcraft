@@ -377,8 +377,16 @@ async def make_move(
     row = int((new_y - bounds[1][0]) / (bounds[1][1] - bounds[1][0]) * grid_size)
     new_grid_pos = [max(0, min(grid_size - 1, col)), max(0, min(grid_size - 1, row))]
 
+    # Calculate normalized position
+    norm_x = (new_x - bounds[0][0]) / (bounds[0][1] - bounds[0][0])
+    norm_y = (new_y - bounds[1][0]) / (bounds[1][1] - bounds[1][0])
+
     # 7. Update the participant's info in the GameSession object.
     session.participants[participant_index].position = new_grid_pos
+    session.participants[participant_index].normalized_position = [
+        float(norm_x),
+        float(norm_y),
+    ]
     session.participants[participant_index].fitness = new_fitness
     session.participants[participant_index].velocity_magnitude = velocity_mag
 

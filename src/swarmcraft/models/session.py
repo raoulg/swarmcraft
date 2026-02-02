@@ -33,6 +33,9 @@ class Participant(BaseModel):
     continuous_position: Optional[List[float]] = (
         None  # Actual continuous coordinates [x, y]
     )
+    normalized_position: Optional[List[float]] = (
+        None  # Normalized continuous coordinates [0..1, 0..1]
+    )
     fitness: Optional[float] = None
     velocity_magnitude: Optional[float] = None
     connected: bool = True

@@ -278,6 +278,10 @@ class ConnectionManager:
             "type": "participant_moved",
             "participant_id": participant_id,
             "position": position,
+            "normalized_position": [
+                (position[0] + 0.5) / grid_size,
+                (position[1] + 0.5) / grid_size,
+            ],
             "fitness": fitness,
             "timestamp": datetime.now().isoformat(),
         }
