@@ -1,4 +1,5 @@
 from contextlib import asynccontextmanager
+import os
 from fastapi import FastAPI, WebSocket, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
@@ -48,12 +49,15 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+
 # CORS for frontend
-# NOTE: Using "*" is permissive for development. For production, you would
-# restrict this to your actual frontend's domain.
+# Get allowed origins from environment variable, default to "*" if not set
+cors_origins_str = os.getenv("CORS_ORIGINS", "*")
+origins = [origin.strip() for origin in cors_origins_str.split(",") if origin.strip()]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allow all origins for easy local testing
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

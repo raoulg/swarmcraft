@@ -16,8 +16,14 @@ setup:
 	@if [ ! -f .env ]; then \
 		cp .env.example .env; \
 		KEY=$$(openssl rand -hex 32 2>/dev/null || echo "fallback_key_$$(date +%s)"); \
-		sed -i.bak "s|SWARM_API_KEY=.*|SWARM_API_KEY=$$KEY|" .env && rm -f .env.bak; \
-		echo "Created .env with a unique SWARM_API_KEY"; \
+		sed -i.bak "s|SWARM_API_KEY=.*|SWARM_API_KEY=$$KEY|" .env; \
+		PUBLIC_IP=$$(curl -s -4 ifconfig.me || curl -s -4 icanhazip.com); \
+		if [ -n "$$PUBLIC_IP" ]; then \
+			echo "Detected Public IP: $$PUBLIC_IP"; \
+			sed -i.bak "s|CORS_ORIGINS=.*|CORS_ORIGINS=http://localhost:5173,http://$$PUBLIC_IP|" .env; \
+		fi; \
+		rm -f .env.bak; \
+		echo "Created .env with a unique SWARM_API_KEY and CORS origins"; \
 	fi
 	uv sync
 
@@ -25,8 +31,14 @@ up:
 	@if [ ! -f .env ]; then \
 		cp .env.example .env; \
 		KEY=$$(openssl rand -hex 32 2>/dev/null || echo "fallback_key_$$(date +%s)"); \
-		sed -i.bak "s|SWARM_API_KEY=.*|SWARM_API_KEY=$$KEY|" .env && rm -f .env.bak; \
-		echo "Created .env with a unique SWARM_API_KEY"; \
+		sed -i.bak "s|SWARM_API_KEY=.*|SWARM_API_KEY=$$KEY|" .env; \
+		PUBLIC_IP=$$(curl -s -4 ifconfig.me || curl -s -4 icanhazip.com); \
+		if [ -n "$$PUBLIC_IP" ]; then \
+			echo "Detected Public IP: $$PUBLIC_IP"; \
+			sed -i.bak "s|CORS_ORIGINS=.*|CORS_ORIGINS=http://localhost:5173,http://$$PUBLIC_IP|" .env; \
+		fi; \
+		rm -f .env.bak; \
+		echo "Created .env with a unique SWARM_API_KEY and CORS origins"; \
 	fi
 	docker compose up -d
 
